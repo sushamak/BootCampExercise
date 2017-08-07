@@ -1,0 +1,90 @@
+public class jsonSchemaValidator{
+private JSONObject generateSchema(Map<String, Object> mapObject) {
+        JSONObject schema = new JSONObject();
+        for (Map.Entry<String, Object> entry : mapObject.entrySet()) {
+            if (entry.getValue() instanceof DBObject)
+                schema.put(entry.getKey(), generateNodeSchema((DBObject) entry.getValue()));
+            else
+                schema.put(entry.getKey(), getJSONType(entry.getValue()));
+        }
+        return schema;
+    }
+
+    private JSONObject generateNodeSchema(DBObject entry) {
+        JSONObject jsonObject = new JSONObject();
+        if (entry instanceof BasicDBObject) {
+            Map<String, Object> map = (BasicDBObject) entry;
+            JSONObject tempJSON = new JSONObject();
+            for (Map.Entry<String, Object> entry1 : map.entrySet()) {
+                if (entry1.getValue() instanceof DBObject)
+                    tempJSON.put(entry1.getKey(), generateNodeSchema((DBObject) entry1.getValue()));
+                else
+                    tempJSON.put(entry1.getKey(), getJSONType(entry1.getValue()));
+            }
+            jsonObject.put("properties", tempJSON);
+            jsonObject.put("type", JsonNodeType.OBJECT.name().toLowerCase());
+        } else if (entry instanceof BasicDBList) {
+            Set<JSONObject> jsonArray = new HashSet<>();
+            BasicDBList list = (BasicDBList) entry;
+            for (Object listElement : list) {
+                if (listElement instanceof DBObject)
+                    jsonArray.add(generateNodeSchema((DBObject) listElement));
+                else {
+                    JSONObject jsonType = getJSONType(listElement);
+                    if (!jsonArray.toString().contains(jsonType.toString()))
+                        jsonArray.add(jsonType);
+
+                }
+            }
+            jsonObject.put("items", jsonArray);
+            jsonObject.put("type", JsonNodeType.ARRAY.name().toLowerCase());
+           /* for(Object ele : list ){
+                if(ele instanceof BasicDBObject){
+                    JSONObject item = new JSONObject();
+                    jsonObject.put("items", generateNodeSchema((DBObject) ele));
+                }else if(ele instanceof BasicBSONList){
+                        BasicDBList basicDBList = (BasicDBList) ele;
+                    for(Object deep3 : basicDBList ){
+                        jsonObject.append(generateNodeSchema((DBObject) deep3));
+                    }
+
+                }else{
+                    JSONObject properties = new JSONObject();
+                    properties.put("properties",getJSONType(ele));
+                    jsonObject.put(entry.getKey(),properties);
+                }
+            }*/
+        } else {
+            getJSONType(entry);
+        }
+        return jsonObject;
+    }
+
+    private JSONObject getJSONType(Object entry) {
+        JSONObject typeObject = new JSONObject();
+        typeObject.put("type", entry.getClass());
+        return typeObject;
+    }
+
+    private void replaceValue(Map<String, Object> concurrentHashMap) {
+        for (Map.Entry<String, Object> entry : concurrentHashMap.entrySet()) {
+            if (entry.getValue() instanceof BasicDBObject) {
+                Map<String, Object> map = (BasicDBObject) entry.getValue();
+                for (Map.Entry<String, Object> entry1 : map.entrySet()) {
+                    entry1.setValue(entry1.getValue().getClass());
+                }
+            } else if (entry.getValue() instanceof BasicDBList) {
+                BasicDBList list = ((BasicDBList) entry.getValue());
+                for (Object ele : list) {
+                    if (ele instanceof BasicDBObject) {
+                        replaceValue((BasicDBObject) ele);
+                    } else {
+                        entry.setValue(entry.getValue().getClass());
+                    }
+                }
+            } else {
+                entry.setValue(entry.getValue().getClass());
+            }
+        }
+    }
+}
